@@ -1,5 +1,4 @@
 ____________________
-
 ANSI X3.4-1986
 
 !"#$%&'()*+,-./ 
@@ -8,14 +7,16 @@ ABCDEFGHIJKLMNO
 PQRSTUVWXYZ[\]^_ `
 abcdefghijklmno 
 pqrstuvwxyz {|}~
+
 ____________________
+Additional UTF-8 characters²:
 
-
-Example decimal codes for keys
-not on the C64 keyboard:
-
-126     =       Tilde ~  
-123     =       Curly brace {
-125     =       Curly brace }
- 96     =       Backtick `
- 
+äöü [C= + AOU]
+ÄÖÜ [C= + AOU] press twice
+ß   [C= + S]
+§   [C= + P]
+„ “ [C= + 2]
+–   [C= + Minus]
+°   [C= + G]
+Guillemet « (171) » (187) 
+and more…
