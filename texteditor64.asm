@@ -1,7 +1,7 @@
 ; ========================================================================================
 ;  ASCII text editor for the C64
 ;  Copyright (c) 2026 supertoq
-;  Version 2  (y)
+;  Version 2 (2.9)
 ;  https://github.com/supertoq/Texteditor64
 ;
 ;  A text editor that can load, edit and save ASCII code.
@@ -12,27 +12,27 @@
 ;  - Files are saved as C64 SEQ files containing plain ASCII
 ;    (on Windows the file extension .seq has to be renamed to .txt)
 ;  - Line ending LF or CRLF selectable in the source code
-;  - Text memory $36B7-$CEFF (38,985 bytes), BASIC ROM is switched off
-;  - Program memory usage 12.9 KByte
+;  - Text memory $3FB7-$CEFF (36,681 bytes), BASIC ROM is switched off
+;  - Program memory usage 15.0 KByte
 ;  - Upper/lower case character set is copied to RAM at $D000
 ;  - Every input is converted to ASCII
 ;  - Characters not available on the keyboard can be entered manually with F8
-;  - German UTF-8 umlauts are shown as inverted letters, no conversion in the text
+;  - German UTF-8 umlauts are shown as own characters, no conversion in the text
+;  - Files too large for memory can be loaded in parts (e.g. to read a whole book)
 ;  - Before saving to disk, the free space is checked
-;  - File access via the UCI interface (Ultimate 64, C64 Ultimate)
-;  - UCI: Files too large for memory can be loaded in parts, e.g. to read a whole book
-;  - A loaded text section is not saved under its old file name
-;  - Disk images and programs (e.g. .d64, .prg) are not loaded or saved (optional)
+;  - Supported file access via the UCI interface (Ultimate 64, C64 Ultimate)
+;  - UCI: Files too large for memory are loaded automatically in chunks as you scroll
+;  - Disk images and programs (e.g. .d64, .prg) are not loaded or saved in the editor (optional)
 ;
 ;  Keys:
 ;    F1 = Save  F3 = Load  F5 = New  F7 = Exit  F8 = ASCII code input
 ;    STOP = Cancel (in the file browser and prompts)
 ;
 ;    Cursor keys =  Navigation       HOME    =  Start of line
-;    DEL         =  Backspace        CLR     =  Start of text
-;    SHIFT+DEL   =  Delete (INST)    F2      =  End of text
+;    DEL         =  Backspace        HOME 2x =  Start of text/file
+;    SHIFT+DEL   =  Delete (INST)    CLR     =  End of text/file (SHIFT+HOME)
 ;    RETURN      =  New line         F4 / F6 =  Page up / down
-;    CTRL+I      =  Tab
+;    CTRL+I      =  Tab              F2      =  Display control characters on/off
 ;
 ;  Direct character input on the C64 keyboard:
 ;        Pound key                   =  Backslash \
@@ -44,6 +44,14 @@
 ;        SHIFT+| (key left of RESTORE) = Caret ^
 ;        SHIFT+:                     =  Square bracket [
 ;        SHIFT+;                     =  Square bracket ]
+;        C= + A / O / U              =  Umlaut ae oe ue (again at once: AE OE UE)
+;        C= + S                      =  Sz
+;        C= + P                      =  Section sign (paragraph)
+;        C= + G                      =  Degree
+;        C= + Minus                  =  Dash
+;        C= + 2 (key with ")         =  German quotes: low at the start of
+;                                       a word, otherwise high (again: switch)
+;        C= + 7 (key with ')         =  Apostrophe (typographic)
 ;
 ;        F8  =  Character input by ASCII code (decimal)
 ;               33 - 126 = ASCII character codes
@@ -56,13 +64,12 @@
 ;               Umlauts as Unicode input:
 ;               228 = ae  246 = oe  252 = ue
 ;               196 = AE  214 = OE  220 = UE  223 = sz
+;               Further characters as Unicode input (examples):
+;               167 = para  176 = deg  178 = sup2  179 = sup3  181 = micro
+;               233 = e-acute  169 = (C)  174 = (R)  160 = no-break space
+;               8222 / 8220 = German quotes  8218 / 8216 = single quotes
+;               8211 = dash  8230 = ellipsis  8217 = apostrophe
 ;                             
-;  Alternative character display:
-;        Curly braces { } = shown as inverted brackets ()
-;        Tilde ~ = shown as inverted minus -
-;        UTF-8 German umlauts = shown as inverted characters
-;        UTF-8 chevrons << >> = shown as inverted < >
-;
 ;  Starting the editor - from disk with LOAD"TEXTEDITOR",8 and RUN
 ;
 ;  File browser for loading (F3) and saving (F1) files:
@@ -80,7 +87,7 @@
 ;
 ;    The file name can be edited manually at any time.
 ;    Overwriting a file has to be confirmed.
-;    Wildcards: * ? are allowed for selecting files, but not when saving.
+;    Wildcards: * ? can be used to select files to load.
 ;    Optionally, entering $ re-reads the drive contents.
 ;    The maximum length of file names is 25 characters for UCI and 16 for disks.
 ;    UCI access distinguishes between upper and lower case.
@@ -101,26 +108,47 @@ CRLF    = 0                     ; Line ending: 0 = LF, 1 = CR+LF
 ; screen codes. Values can be chosen freely (upper/lower case set):
 ;   0 = @   1-26 = a-z   27 = [   28 = \   29 = ]   30 = up arrow
 ;   32-63 = space, digits, punctuation   65-90 = A-Z
+;   94-127 = own characters (see OWNCHARS below)
 ;   +128 = inverted (e.g. 129 = inverted a)
-ALT_LBRACE      = 168           ; {  inverted (
-ALT_RBRACE      = 169           ; }  inverted )
-ALT_TILDE       = 173           ; ~  inverted -
-ALT_BACKTICK    = 167           ; `  inverted '
+ALT_LBRACE      = 112           ; {  own character
+ALT_RBRACE      = 113           ; }  own character
+ALT_TILDE       = 114           ; ~  own character
+ALT_BACKTICK    = 115           ; `  own character
 ALT_PIPE        = 93            ; |  vertical bar
 ALT_UNDERSCORE  = 100           ; _  underline
-ALT_BACKSLASH   = 28            ; \  own character
-ALT_CARET       = 30            ; ^  up arrow
+ALT_BACKSLASH   = 117           ; \  own character
+ALT_CARET       = 116           ; ^  own character
 ALT_OTHER       = 174           ; all others: inverted dot
+; Control characters, visible with F2
+ALT_TABSYM      = 127           ; Tab        own character
+ALT_LFSYM       = 111           ; Line feed  own character
+ALT_SPSYM       = 110           ; Space      own character
 ; UTF-8 characters (umlauts and guillemets)
-ALT_AE_KL       = 129           ; a-umlaut    inverted a
-ALT_OE_KL       = 143           ; o-umlaut    inverted o
-ALT_UE_KL       = 149           ; u-umlaut    inverted u
-ALT_AE_GR       = 193           ; A-umlaut    inverted A
-ALT_OE_GR       = 207           ; O-umlaut    inverted O
-ALT_UE_GR       = 213           ; U-umlaut    inverted U
-ALT_SZ          = 194           ; sharp s     inverted B
-ALT_LAQUO       = 188           ; Guillemet left (171)    inverted <
-ALT_RAQUO       = 190           ; Guillemet right (187)   inverted >
+ALT_AE_KL       = 118           ; a-umlaut    own character
+ALT_OE_KL       = 119           ; o-umlaut    own character
+ALT_UE_KL       = 120           ; u-umlaut    own character
+ALT_AE_GR       = 121           ; A-umlaut    own character
+ALT_OE_GR       = 122           ; O-umlaut    own character
+ALT_UE_GR       = 123           ; U-umlaut    own character
+ALT_SZ          = 124           ; sharp s     own character
+ALT_LAQUO       = 125           ; Guillemet left (171)    own character
+ALT_RAQUO       = 126           ; Guillemet right (187)   own character
+ALT_PARA        = 95            ; Section sign (167)      own character
+ALT_DEG         = 96            ; Degree (176)            own character
+ALT_SUP2        = 97            ; Superscript 2 (178)     own character
+ALT_SUP3        = 98            ; Superscript 3 (179)     own character
+ALT_MICRO       = 99            ; Micro (181)             own character
+ALT_EACUTE      = 101           ; e with acute (233)      own character
+ALT_COPY        = 102           ; Copyright (169)         own character
+ALT_REG         = 103           ; Registered (174)        own character
+ALT_NBSP        = 32            ; No-break space (160)    space
+ALT_BDQUO       = 104           ; German quote low (8222) own character
+ALT_LDQUO       = 105           ; German quote high (8220) own character
+ALT_SBQUO       = 106           ; Single quote low (8218) own character
+ALT_LSQUO       = 107           ; Single quote high (8216) own character
+ALT_NDASH       = 108           ; Dash (8211)             own character
+ALT_HELLIP      = 109           ; Ellipsis (8230)         own character
+ALT_RSQUO       = 94            ; Apostrophe (8217)       own character
 
 ; Option:
 ; Show blacklisted file extensions in the file browser:   yes = 1; no = 0
@@ -145,6 +173,285 @@ WARNCOL = 10                    ; Warning color of the buffer display below 1000
 ; In upper case, separated by spaces!
 BLOCKED .macro
         .text "D64 G64 D71 G71 D81 DNP ISO CRT TAP T64 REU SID PRG ZIP"
+        .endm
+
+; Option:
+; Own characters, 8 x 8 pixels (1 = pixel set), screen codes 94-127.
+; They replace PETSCII graphics the editor does not need.
+; The inverted copy for the cursor is made automatically.
+OWNCHARS .macro
+        .byte %00011000            ; 94  apostrophe, single quote right
+        .byte %00011000
+        .byte %00010000
+        .byte %00000000
+        .byte %00000000
+        .byte %00000000
+        .byte %00000000
+        .byte %00000000
+        .byte %00111100            ; 95  section sign
+        .byte %01100000
+        .byte %00111100
+        .byte %01100110
+        .byte %00111100
+        .byte %00000110
+        .byte %00111100
+        .byte %00000000
+        .byte %00111100            ; 96  degree
+        .byte %01100110
+        .byte %00111100
+        .byte %00000000
+        .byte %00000000
+        .byte %00000000
+        .byte %00000000
+        .byte %00000000
+        .byte %01111000            ; 97  superscript 2
+        .byte %00001100
+        .byte %00110000
+        .byte %01111100
+        .byte %00000000
+        .byte %00000000
+        .byte %00000000
+        .byte %00000000
+        .byte %01111000            ; 98  superscript 3
+        .byte %00011000
+        .byte %00001100
+        .byte %01111000
+        .byte %00000000
+        .byte %00000000
+        .byte %00000000
+        .byte %00000000
+        .byte %00000000            ; 99  micro
+        .byte %00000000
+        .byte %01100110
+        .byte %01100110
+        .byte %01100110
+        .byte %01100110
+        .byte %01111110
+        .byte %01100000
+        .byte %00000000            ; 100 underscore (as in the ROM)
+        .byte %00000000
+        .byte %00000000
+        .byte %00000000
+        .byte %00000000
+        .byte %00000000
+        .byte %00000000
+        .byte %11111111
+        .byte %00001100            ; 101 e with acute
+        .byte %00000000
+        .byte %00111100
+        .byte %01100110
+        .byte %01111110
+        .byte %01100000
+        .byte %00111100
+        .byte %00000000
+        .byte %00111100            ; 102 copyright
+        .byte %01000010
+        .byte %10011101
+        .byte %10100001
+        .byte %10100001
+        .byte %10011101
+        .byte %01000010
+        .byte %00111100
+        .byte %00111100            ; 103 registered
+        .byte %01000010
+        .byte %10111001
+        .byte %10100101
+        .byte %10111001
+        .byte %10100101
+        .byte %01000010
+        .byte %00111100
+        .byte %00000000            ; 104 German quote low
+        .byte %00000000
+        .byte %00000000
+        .byte %00000000
+        .byte %00000000
+        .byte %01100110
+        .byte %01100110
+        .byte %01000100
+        .byte %00100010            ; 105 German quote high
+        .byte %01100110
+        .byte %01100110
+        .byte %00000000
+        .byte %00000000
+        .byte %00000000
+        .byte %00000000
+        .byte %00000000
+        .byte %00000000            ; 106 single quote low
+        .byte %00000000
+        .byte %00000000
+        .byte %00000000
+        .byte %00000000
+        .byte %00011000
+        .byte %00011000
+        .byte %00010000
+        .byte %00001000            ; 107 single quote high
+        .byte %00011000
+        .byte %00011000
+        .byte %00000000
+        .byte %00000000
+        .byte %00000000
+        .byte %00000000
+        .byte %00000000
+        .byte %00000000            ; 108 dash
+        .byte %00000000
+        .byte %00000000
+        .byte %11111110
+        .byte %00000000
+        .byte %00000000
+        .byte %00000000
+        .byte %00000000
+        .byte %00000000            ; 109 ellipsis
+        .byte %00000000
+        .byte %00000000
+        .byte %00000000
+        .byte %00000000
+        .byte %11011011
+        .byte %11011011
+        .byte %00000000
+        .byte %00000000            ; 110 space (dot)
+        .byte %00000000
+        .byte %00000000
+        .byte %00011000
+        .byte %00011000
+        .byte %00000000
+        .byte %00000000
+        .byte %00000000
+        .byte %00000011            ; 111 line feed (return arrow)
+        .byte %00110011
+        .byte %01100011
+        .byte %11111111
+        .byte %01100000
+        .byte %00110000
+        .byte %00000000
+        .byte %00000000
+        .byte %00001110            ; 112 {
+        .byte %00011000
+        .byte %00011000
+        .byte %01110000
+        .byte %00011000
+        .byte %00011000
+        .byte %00001110
+        .byte %00000000
+        .byte %01110000            ; 113 }
+        .byte %00011000
+        .byte %00011000
+        .byte %00001110
+        .byte %00011000
+        .byte %00011000
+        .byte %01110000
+        .byte %00000000
+        .byte %00000000            ; 114 ~
+        .byte %00000000
+        .byte %00000000
+        .byte %01110011
+        .byte %11001110
+        .byte %00000000
+        .byte %00000000
+        .byte %00000000
+        .byte %00110000            ; 115 `
+        .byte %00011000
+        .byte %00001100
+        .byte %00000000
+        .byte %00000000
+        .byte %00000000
+        .byte %00000000
+        .byte %00000000
+        .byte %00011000            ; 116 ^
+        .byte %00111100
+        .byte %01100110
+        .byte %00000000
+        .byte %00000000
+        .byte %00000000
+        .byte %00000000
+        .byte %00000000
+        .byte %00000000            ; 117 \
+        .byte %11000000
+        .byte %01100000
+        .byte %00110000
+        .byte %00011000
+        .byte %00001100
+        .byte %00000110
+        .byte %00000000
+        .byte %01100110            ; 118 a-umlaut
+        .byte %00000000
+        .byte %00111100
+        .byte %00000110
+        .byte %00111110
+        .byte %01100110
+        .byte %00111110
+        .byte %00000000
+        .byte %01100110            ; 119 o-umlaut
+        .byte %00000000
+        .byte %00111100
+        .byte %01100110
+        .byte %01100110
+        .byte %01100110
+        .byte %00111100
+        .byte %00000000
+        .byte %01100110            ; 120 u-umlaut
+        .byte %00000000
+        .byte %01100110
+        .byte %01100110
+        .byte %01100110
+        .byte %01100110
+        .byte %00111110
+        .byte %00000000
+        .byte %01100110            ; 121 A-umlaut
+        .byte %00011000
+        .byte %00111100
+        .byte %01100110
+        .byte %01111110
+        .byte %01100110
+        .byte %01100110
+        .byte %00000000
+        .byte %01100110            ; 122 O-umlaut
+        .byte %00111100
+        .byte %01100110
+        .byte %01100110
+        .byte %01100110
+        .byte %01100110
+        .byte %00111100
+        .byte %00000000
+        .byte %11000011            ; 123 U-umlaut
+        .byte %00000000
+        .byte %11000011
+        .byte %11000011
+        .byte %11000011
+        .byte %11000011
+        .byte %01111110
+        .byte %00000000
+        .byte %00111100            ; 124 sharp s
+        .byte %01100110
+        .byte %01100110
+        .byte %01101100
+        .byte %01100110
+        .byte %01100110
+        .byte %01101100
+        .byte %01100000
+        .byte %00000000            ; 125 guillemet left
+        .byte %00000000
+        .byte %00110011
+        .byte %01100110
+        .byte %11001100
+        .byte %01100110
+        .byte %00110011
+        .byte %00000000
+        .byte %00000000            ; 126 guillemet right
+        .byte %00000000
+        .byte %11001100
+        .byte %01100110
+        .byte %00110011
+        .byte %01100110
+        .byte %11001100
+        .byte %00000000
+        .byte %00000000            ; 127 tab (arrow)
+        .byte %00001100
+        .byte %00000110
+        .byte %01111111
+        .byte %00000110
+        .byte %00001100
+        .byte %00000000
+        .byte %00000000
         .endm
 
 ; ---- Memory layout
@@ -405,12 +712,19 @@ start   lda #$36                ; BASIC ROM off, KERNAL and I/O on
         ldx #>$d800             ; upper/lower case set of the ROM
         ldy #>CSTMP             ; to the (still empty) text memory
         jsr cp2k
-        ldy #7                  ; Character \ from the upper case set
--       lda $d000+$4d*8,y       ; ($4D) replaces the pound sign
-        sta CSTMP+$1c*8,y       ; (screen code $1C)
+        ldx #0                  ; own characters (option OWNCHARS)
+-       lda OWNC,x              ; first 256 bytes
+        sta CSTMP+OWN1*8,x
         eor #$ff                ; also inverted for the cursor
-        sta CSTMP+$9c*8,y       ; (screen code $9C)
-        dey
+        sta CSTMP+(OWN1+128)*8,x
+        inx
+        bne -
+        ldx #OWNEND-OWNC-256-1  ; the rest
+-       lda OWNC+256,x
+        sta CSTMP+OWN1*8+256,x
+        eor #$ff
+        sta CSTMP+(OWN1+128)*8+256,x
+        dex
         bpl -
         lda #$34                ; all RAM: copy to the RAM under the I/O area
         sta $01
@@ -476,6 +790,12 @@ mk      jsr getkey
 
 nmiret  rti
 
+; Own characters for screen codes 94-127 (option OWNCHARS)
+OWN1    = 94                    ; first screen code
+OWNC    #OWNCHARS
+OWNEND
+        .cerror OWNEND-OWNC != (128-OWN1)*8, "OWNCHARS needs 34 characters (94-127)"
+
 ; Copy 2 KB from page X to page Y
 cp2k    stx p+1
         sty q+1
@@ -503,6 +823,9 @@ getkey  jsr GETIN
 ;  Key dispatch
 ; ---------------------------------------------------------------------
 dispatch
+        ldx thiskey             ; remember the previous key (HOME 2x)
+        stx lastkey
+        sta thiskey
         ldx #nkeys-1
 -       cmp keys,x
         beq +
@@ -513,7 +836,68 @@ dispatch
         beq dsp_rt
         jmp insert
 dsp_rt  rts
-+       txa
++       stx kidx
+        lda cur                 ; remember the cursor
+        sta cur0
+        lda cur+1
+        sta cur0+1
+        jsr dsp_go
+        lda stream              ; streaming: cursor did not move
+        beq ds_rt2              ; (then the key again in the new part)
+        lda #1                  ; or moved to the end of the part?
+        sta sredo
+        lda cur
+        cmp cur0
+        bne +
+        lda cur+1
+        cmp cur0+1
+        beq ds_dir
++       lda cur+1               ; (BUFEND = $xx00: high byte is enough)
+        cmp #>BUFEND
+        bne ds_rt2
+        dec sredo
+ds_dir  ldx kidx                ; keys 0-2 forward, 3-5 back
+        cpx #6
+        bcs ds_rt2
+        ldy #1
+        cpx #3
+        bcc ds_fw
+        iny
+        bne ds_bw
+ds_rt2  rts
+ds_fw   lda ukk                 ; not in the last part
+        cmp unum
+        bne +
+        lda ukk+1
+        cmp unum+1
+        beq ds_rt2
++       clc
+        lda ukk
+        adc #1
+        sta snew
+        lda ukk+1
+        adc #0
+        sta snew+1
+        jmp ds_sw
+ds_bw   lda ukk+1               ; not in the first part
+        bne +
+        lda ukk
+        cmp #1
+        beq ds_rt2
++       sec
+        lda ukk
+        sbc #1
+        sta snew
+        lda ukk+1
+        sbc #0
+        sta snew+1
+ds_sw   sty smode
+        jsr sswitch             ; load the next/previous part,
+        bcs ds_rt2
+        lda sredo
+        beq ds_rt2
+        ldx kidx                ; then the key again
+dsp_go  txa
         asl
         tay
         lda hand+1,y
@@ -522,13 +906,114 @@ dsp_rt  rts
         pha
         rts
 
-keys    .byte $0d,$8d,$11,$91,$1d,$9d,$14,$94,$13,$93
-        .byte $89,$8a,$8b,$85,$86,$87,$88,$8c
+keys    .byte $11,$1d,$8b           ; forward: down, right, F6 (0-2)
+        .byte $91,$9d,$8a           ; back: up, left, F4 (3-5)
+        .byte $0d,$8d,$14,$94,$13,$93
+        .byte $89,$85,$86,$87,$88,$8c
+kuml    .byte $b0,$b9,$b8,$ae   ; C= + A, O, U, S
+        .byte $af,$a5,$dc,$95   ; C= + P, G, minus, 2
+        .byte $9a               ; C= + 7 (key with ')
 nkeys   = * - keys
-hand    .word k_ret-1,k_ret-1,k_down-1,k_up-1,k_right-1,k_left-1
-        .word k_bs-1,k_del-1,k_home-1,k_clr-1
-        .word k_end-1,k_pgup-1,k_pgdn-1
+hand    .word k_down-1,k_right-1,k_pgdn-1
+        .word k_up-1,k_left-1,k_pgup-1
+        .word k_ret-1,k_ret-1,k_bs-1,k_del-1,k_home-1,k_clr-1
+        .word k_show-1
         .word k_save-1,k_load-1,k_new-1,k_quit-1,k_code-1
+        .word k_uml-1,k_uml-1,k_uml-1,k_uml-1
+        .word k_uml-1,k_uml-1,k_uml-1,k_uml-1
+        .word k_uml-1
+
+; C= + key: insert a character (2 bytes, see umld/umlo).  The same
+; key again at once switches its other form (AE OE UE, high quote).
+; C= + 2: low quote at the start of a word, otherwise high quote.
+k_uml   txa                     ; X = position in the key table
+        sec
+        sbc #kuml-keys
+        tax                     ; 0-8 = a o u s para deg dash quote apos
+        lda lastkey
+        cmp thiskey
+        bne um_new
+        lda umdone              ; was it inserted (not memory full)?
+        beq um_new
+        lda umtg,x              ; is there another form?
+        beq um_new
+        lda gs                  ; p = gs - 2 (at least 2 bytes there?)
+        sec
+        sbc #2
+        sta p
+        lda gs+1
+        sbc #0
+        sta p+1
+        lda p
+        cmp #<BUF
+        lda p+1
+        sbc #>BUF
+        bcc um_new
+        ldy #0
+        lda (p),y
+        cmp umld,x
+        bne um_new
+        iny
+        lda (p),y
+        eor umlo,x              ; 0 or the other form?
+        beq +
+        cmp umtg,x
+        bne um_new
++       lda (p),y               ; switch the form
+        eor umtg,x
+        sta (p),y
+        sta dirty               ; text changed (not 0)
+        rts
+um_new  lda gs
+        pha
+        lda umld,x
+        sta ubuf
+        lda umlo,x
+        cpx #7                  ; quote: high one behind a word
+        bne um_put
+        ldy gs+1                ; start of the text: low quote
+        cpy #>BUF
+        bne +
+        ldy gs
+        cpy #<BUF
+        beq um_put
++       sta ubuf+1
+        lda gs                  ; character before the cursor
+        sec
+        sbc #1
+        sta p
+        lda gs+1
+        sbc #0
+        sta p+1
+        ldy #0
+        lda (p),y
+        ldy #4
+-       cmp umsp,y
+        beq +
+        dey
+        bpl -
+        lda ubuf+1              ; behind a word: high quote
+        eor #$02
+        sta ubuf+1
++       lda ubuf+1
+um_put  sta ubuf+1
+        lda #2
+        sta ulen
+        jsr kc_put
+        pla
+        eor gs                  ; not 0: inserted
+        sta umdone
+        rts
+;               ae   oe   ue   sz   para deg  dash quote apos
+umld    .byte $c3, $c3, $c3, $c3, $c2, $c2, $c1, $c1, $c1  ; first byte
+umlo    .byte $a4, $b6, $bc, $9f, $a7, $b0, $93, $9e, $99  ; second byte
+umtg    .byte $20, $20, $20, 0,   0,   0,   0,   $02, 0    ; other form (eor)
+umsp    .byte $20, TAB, LF, '(', '['                  ; start of a word
+
+k_show  lda showctl             ; F2: control characters on/off
+        eor #1
+        sta showctl
+        rts
 
 ; Convert a key code into an ASCII character
 ; The key code arrives in register A,
@@ -599,11 +1084,14 @@ a2stab  .for i = 0, i < 128, i += 1
         .next
 
 ; Is the byte in A a lead byte of a UTF-8 character (194 or 195)?
+; 193 ($C1) is used inside the editor for E2 80 xx (quotes, dash, ...)
 ; Zero flag set: yes, the byte is stored in u8lead
 ; A, X and Y are unchanged
 islead  cmp #$c3
         beq il_y
         cmp #$c2
+        beq il_y
+        cmp #$c1
         bne il_n
 il_y    sta u8lead
 il_n    rts
@@ -615,7 +1103,7 @@ il_n    rts
 ; Registers X and Y are unchanged
 u8map   stx u8sx
         sta u8sec
-        ldx #8
+        ldx #u8n-1
 um1     lda u8tab,x
         cmp u8sec
         bne um3
@@ -636,15 +1124,30 @@ um2     lda u8gly,x
 ;                 a-uml. o-uml. u-uml. A-uml. O-uml. U-uml. sz     <<     >>
 ; lead bytes:
 u8lt    .byte     $c3,   $c3,   $c3,   $c3,   $c3,   $c3,   $c3,   $c2,   $c2
+;                 para   deg    sup2   sup3   micro  e-acu. copy   reg    nbsp
+        .byte     $c2,   $c2,   $c2,   $c2,   $c2,   $c3,   $c2,   $c2,   $c2
+;                 low "  high " low '  high ' dash   ...    '   (E2 80 xx, see e3tab)
+        .byte     $c1,   $c1,   $c1,   $c1,   $c1,   $c1,   $c1
 ; second bytes:
 u8tab   .byte     $a4,   $b6,   $bc,   $84,   $96,   $9c,   $9f,   $ab,   $bb
+        .byte     $a7,   $b0,   $b2,   $b3,   $b5,   $a9,   $a9,   $ae,   $a0
+e3tab   .byte     $9e,   $9c,   $9a,   $98,   $93,   $a6,   $99
+e3n     = * - e3tab
+u8n     = * - u8tab
 ; matching screen codes (see options above)
 u8gly   .byte ALT_AE_KL, ALT_OE_KL, ALT_UE_KL, ALT_AE_GR, ALT_OE_GR, ALT_UE_GR, ALT_SZ, ALT_LAQUO, ALT_RAQUO
+        .byte ALT_PARA, ALT_DEG, ALT_SUP2, ALT_SUP3, ALT_MICRO, ALT_EACUTE, ALT_COPY, ALT_REG, ALT_NBSP
+        .byte ALT_BDQUO, ALT_LDQUO, ALT_SBQUO, ALT_LSQUO, ALT_NDASH, ALT_HELLIP, ALT_RSQUO
+        .cerror u8gly-u8lt != 2*u8n, "UTF-8 tables do not match"
 
 ; ---------------------------------------------------------------------
 ;  Editing the text
 ; ---------------------------------------------------------------------
-newtext lda #<BUF               ; empty text: gap covers the whole memory
+newtext lda #0                  ; no streaming, nothing changed
+        sta stream
+        sta dirty
+        sta e2st
+        lda #<BUF               ; empty text: gap covers the whole memory
         sta gs
         lda #>BUF
         sta gs+1
@@ -686,10 +1189,7 @@ tstart  lda #<BUF
         lda gs+1
         cmp #>BUF
         bne +
-        lda cur
-        sta p
-        lda cur+1
-        sta p+1
+        jsr curp
 +       rts
 
 ; Is p at the start of the text?  Zero flag set: yes
@@ -719,10 +1219,10 @@ insert  sta chr                 ; save the character
         bne ins_ok
         jsr stclear
         #msg m_full
-        lda #1
-        sta statshow
-        rts
-ins_ok  lda top                 ; top on the cursor: points to
+        jmp stshw
+ins_ok  lda #1                  ; text changed
+        sta dirty
+        lda top                 ; top on the cursor: points to
         cmp cur                 ; the new character afterwards
         bne ins_st
         lda top+1
@@ -801,10 +1301,7 @@ md4     rts
 k_ret   lda #LF
         jmp insert
 
-k_bs    lda cur                 ; Backspace
-        sta p
-        lda cur+1
-        sta p+1
+k_bs    jsr curp                 ; Backspace
         jsr isbeg
         beq kb_rt               ; nothing to do at the start of the text
         jsr k_left              ; one character back (also a whole umlaut)
@@ -824,7 +1321,9 @@ k_del   ldy #0
         jsr u8map
         bcs kx_go
         ldx #2
-kx_go   lda top                 ; top on or behind the cursor:
+kx_go   lda #1                  ; text changed
+        sta dirty
+        lda top                 ; top on or behind the cursor:
         cmp cur                 ; moves along (as when moving)
         lda top+1
         sbc cur+1
@@ -845,10 +1344,7 @@ kx_del  txa                     ; add the character to the gap
 kx_rt   rts
 
 ; Cursor one character left (UTF-8 umlaut = one character)
-k_left  lda cur
-        sta p
-        lda cur+1
-        sta p+1
+k_left  jsr curp
         jsr isbeg
         beq kl_rt               ; already at the start of the text
         #prv p
@@ -896,11 +1392,55 @@ kr_go   txa                     ; destination = cursor + length
         jmp moveto
 kr_rt   rts
 
-k_home  jsr rowstart
+k_home  lda lastkey             ; HOME twice: start of text
+        cmp #$13
+        beq kh_top
+        jsr rowstart            ; otherwise start of the line
+        jmp moveto
+kh_top  lda stream              ; streaming: start of the file
+        beq k_top
+        lda ukk+1
+        bne +
+        lda ukk
+        cmp #1
+        beq k_top
++       lda #1
+        sta snew
+        lda #0
+        sta snew+1
+        sta smode
+        jmp sswitch
+
+k_clr   lda stream              ; CLR: end of the text,
+        beq k_end               ; streaming: end of the file
+        lda ukk
+        cmp unum
+        bne +
+        lda ukk+1
+        cmp unum+1
+        beq k_end
++       lda #$ff
+        sta snew
+        sta snew+1
+        lda #3
+        sta smode
+        jmp sswitch
+
+k_top   jsr tstart
         jmp moveto
 
-k_clr   jsr tstart
-        jmp moveto
+curp    lda cur                 ; p = cursor
+        sta p
+        lda cur+1
+        sta p+1
+        rts
+
+totop   jsr k_top               ; cursor and top to the start of the text
+        lda cur
+        sta top
+        lda cur+1
+        sta top+1
+        rts
 
 k_end   lda #<BUFEND
         sta p
@@ -988,10 +1528,7 @@ mt_up   sec                     ; sz = mt - cur
         lda mt+1
         sbc cur+1
         sta sz+1
-        lda cur
-        sta p
-        lda cur+1
-        sta p+1
+        jsr curp
         lda gs
         sta q
         lda gs+1
@@ -1177,7 +1714,7 @@ nr1     lda (p,x)
         beq nr_t
         cmp #TAB
         beq nr_tb
-        cmp #$c2                ; usually no UTF-8: go on quickly
+        cmp #$c1                ; usually no UTF-8: go on quickly
         bcc nr_c
         jsr islead              ; start of a UTF-8 character?
         bne nr_c
@@ -1217,10 +1754,7 @@ ls3     rts
 ; Find the start of the screen line with the cursor
 ; Afterwards p points to this start of the line
 rowstart
-        lda cur
-        sta p
-        lda cur+1
-        sta p+1
+        jsr curp
         jsr linestart
 rs_lp   lda p
         sta r
@@ -1360,15 +1894,23 @@ dr_row  ldy drow
         jmp dr_ch
 dr_zero #gapjmp p, dr_ch         ; gap: continue reading behind it
         jmp dr_fill             ; end of the text
+dr_sp   lda showctl             ; space: as dot if visible
+        beq +
+        lda #ALT_SPSYM-$20
++       clc
+        adc #$20
+        bne dr_put
 dr_ch   lda (p,x)
         beq dr_zero
         #inc16 p
         cmp #$80                ; from 128: UTF-8 or substitute character
         bcs dr_hi
         cmp #LF
-        beq dr_fill
+        beq dr_lf
         cmp #TAB
         beq dr_tab
+        cmp #$20
+        beq dr_sp
         tax                     ; ASCII: screen code from the table
         lda a2stab,x
         ldx #0
@@ -1391,13 +1933,23 @@ dr_oth  lda #ALT_OTHER          ; single byte: substitute character
 dr_tab  lda #TABW               ; show a tab as spaces
         sta tcnt
         lda #$20
+        ldx showctl             ; or as arrow and spaces
+        beq dt_lp
+        lda #ALT_TABSYM
+        ldx #0
 dt_lp   sta (sc),y
+        lda #$20
         iny
         cpy #40
         bcs dr_next             ; line full
         dec tcnt
         bne dt_lp
         jmp dr_ch
+dr_lf   lda showctl             ; line feed visible?
+        beq dr_fill
+        lda #ALT_LFSYM
+        sta (sc),y
+        iny
 dr_fill lda #$20
 -       cpy #40
         bcs dr_next
@@ -1436,9 +1988,11 @@ rowhi   .for i = 0, i < 25, i += 1
 
 ; ---------------------------------------------------------------------
 ;  Info line: show the free text memory (columns 27-37)
-;  Red if less than 1000 bytes are free (WARN)
+;  Red if less than 1000 bytes are free (WARN).  Streaming: "Part k/n"
 ; ---------------------------------------------------------------------
 showfree
+        lda stream              ; streaming: part instead of free
+        bne shpart
         sec                     ; free = size of the gap
         lda cur
         sbc gs
@@ -1499,6 +2053,52 @@ ic      ldx #12
         dex
         bpl -
         rts
+
+; "Part k/n" right-aligned up to column 39 ("Part" only if there is room)
+shpart  ldx #12                 ; clear columns 27-39
+        lda #$20
+-       sta INFO+27,x
+        dex
+        bpl -
+        ldy #39
+        lda unum
+        ldx unum+1
+        jsr pnum
+        lda #'/'
+        sta INFO,y
+        dey
+        lda ukk
+        ldx ukk+1
+        jsr pnum
+        cpy #31                 ; room for "Part "?
+        bcc +
+        dey
+        ldx #3
+-       lda m_ptsc,x
+        sta INFO,y
+        dey
+        dex
+        bpl -
++       lda #TEXTCOL
+        jmp ic
+; Number A (low), X (high) right-aligned up to column Y, Y moves left
+pnum    sta sz
+        stx sz+1
+        tya
+        pha
+        jsr todec
+        pla
+        tay
+        ldx #4
+-       lda numbuf,x
+        cmp #$20
+        beq +
+        sta INFO,y
+        dey
+        dex
+        bpl -
++       rts
+m_ptsc  .byte $50,$01,$12,$14   ; "Part" as screen codes
 
 ; Write number sz (0-65535) as 5 characters to numbuf,
 ; leading zeros become spaces
@@ -1749,6 +2349,19 @@ kc_three
         sta ubuf+2
         lda #3
         sta ulen
+        lda ubuf                ; E2 80 xx of the editor: as C1 xx
+        cmp #$e2
+        bne kc_put
+        lda ubuf+1
+        cmp #$80
+        bne kc_put
+        lda ubuf+2
+        jsr ise3
+        bcs kc_put
+        sta ubuf+1
+        lda #$c1
+        sta ubuf
+        dec ulen
         bne kc_put
 kc_two  lda uval+1
         asl
@@ -1792,9 +2405,7 @@ kp_lp   stx ucnt
         rts
 kp_full jsr stclear
         #msg m_full
-        lda #1
-        sta statshow
-        rts
+        jmp stshw
 
 ; Bits 6-11 of the value uval as UTF-8 continuation byte ($80-$BF) in A
 hi6     lda uval+1
@@ -2363,13 +2974,11 @@ badd    lda bcount
 ; UCI: read the folder
 bl_uci  lda #$12                ; GET_PATH = title
         jsr ucmd
-        lda #<cb_path
-        sta ucbv
-        lda #>cb_path
-        sta ucbv+1
         lda #0
         sta llen
-        jsr ucirun
+        ldx #<cb_path
+        ldy #>cb_path
+        jsr runcb
         bcs bu_err
         ldx #0
         stx broot
@@ -2401,11 +3010,9 @@ bl_uci  lda #$12                ; GET_PATH = title
         bcs bu_err
         lda #$14                ; READ_DIR
         jsr ucmd
-        lda #<cb_bent
-        sta ucbv
-        lda #>cb_bent
-        sta ucbv+1
-        jsr ucirun
+        ldx #<cb_bent
+        ldy #>cb_bent
+        jsr runcb
         bcs bu_err
 bu_ok   clc
         rts
@@ -2898,10 +3505,7 @@ do_bad  jsr closeall
 do_err  jsr CLALL
         jsr stclear
         #msg m_dev
-        lda #1
-        sta statshow
-        sec
-        rts
+        jmp sterr
 
 ; Read one byte of the directory (always 0 after the end)
 dgetb   lda deof
@@ -3008,23 +3612,22 @@ ds_nq   lda dnum
         lda #1
         sta dok
         rts
-ds_q    inx                     ; first character of the name
-        ldy #0
--       cpy flen
-        beq ds_e
-        cpx llen
-        bcs ds_no
-        lda lbuf,x
-        cmp fname,y
+ds_q    lda dfound              ; only the first matching file
         bne ds_no
-        inx
-        iny
-        bne -
-ds_e    cpx llen
+        inx                     ; name up to the next quote to URBUF+1
+        ldy #0
+-       cpx llen
         bcs ds_no
         lda lbuf,x
         cmp #'"'
-        bne ds_no
+        beq +
+        sta URBUF+1,y
+        inx
+        iny
+        bne -
++       sty glen
+        jsr gmatch              ; same name (or pattern * ?)
+        bcc ds_no
         lda dnum
         sta dold
         lda dnum+1
@@ -3050,14 +3653,17 @@ needblk sec                     ; length = memory - free
         sta blen+1
         lda #0
         sta blen+2
-        .if CRLF
-        jsr tstart              ; every LF is saved as CR+LF
-nb_c    ldx #0
+        jsr tstart              ; every LF is saved as CR+LF (CRLF),
+nb_c    ldx #0                  ; C1 xx as E2 80 xx
         lda (p,x)
         beq nb_b
+        cmp #$c1
+        beq +
+        .if CRLF
         cmp #LF
+        .endif
         bne nb_n
-        inc blen
++       inc blen
         bne nb_n
         inc blen+1
         bne nb_n
@@ -3065,7 +3671,6 @@ nb_c    ldx #0
 nb_n    #nxt p
         jmp nb_c
 nb_b
-        .endif
         lda #0
         sta dneed
         sta dneed+1
@@ -3271,7 +3876,11 @@ showdrv ldy #0
         jsr stputc
         iny
         bne -
-+       lda #1
++       jmp stshw
+
+; Show the status line message (statshow), carry set = error
+sterr   sec
+stshw   lda #1
         sta statshow
         rts
 
@@ -3285,10 +3894,7 @@ closeall
 dev_err jsr CLALL
         jsr stclear
         #msg m_dev
-        lda #1
-        sta statshow
-        sec                     ; error
-        rts
+        jmp sterr
 
 ; Saving with space check:
 ;  enough space for the old and the new file: write as TE64.TMP,
@@ -3330,11 +3936,13 @@ ks_ask  jsr getname
         lda #0
         sta bvalid
 +       plp
-        bcc ks_rt
+        bcc ks_ok
         lda nokey               ; "do not replace": go back at once
         bne +
         jsr getkey              ; error: let the message be read
 +       jmp ks_ask
+ks_ok   lda #0                  ; saved: nothing changed any more
+        sta dirty
 ks_rt   rts
 
 ; File already exists: replace?  Carry set: yes
@@ -3379,10 +3987,7 @@ ks_old  jsr askrepl             ; old file present: replace?
         bcs ks_plain
 ks_full jsr stclear
         #msg m_dfull
-        lda #1
-        sta statshow
-        sec                     ; error
-        rts
+        jmp sterr
 
 ; save directly: delete the old file, then write
 ks_plain
@@ -3463,6 +4068,27 @@ fitboth clc
         sbc dneed+1
 +       rts
 
+; Byte A = C1 followed by a byte of e3tab: write E2 80 (the byte
+; follows as usual).  Carry set: done, otherwise A is unchanged
+c1out   cmp #$c1
+        bne c1_no
+        #nxt p                  ; look at the next byte
+        lda (p,x)
+        jsr ise3
+        php
+        #prv p
+        plp
+        bcs c1_n1
+        lda #$e2
+        jsr CHROUT
+        lda #$80
+        jsr CHROUT
+        sec
+        rts
+c1_n1   lda #$c1
+c1_no   clc
+        rts
+
 ; Write the text to the file fname, message in msgbuf afterwards
 ; Carry set: drive not ready
 wrtext  lda #0
@@ -3487,6 +4113,8 @@ wrtext  lda #0
 sv_lp   ldx #0
         lda (p,x)
         beq sv_end              ; end marker
+        jsr c1out               ; C1 xx: E2 80 xx in the file
+        bcs sv_nx
         .if CRLF
         cmp #LF
         bne +
@@ -3496,7 +4124,7 @@ sv_lp   ldx #0
 +
         .endif
         jsr CHROUT
-        #nxt p
+sv_nx   #nxt p
         jmp sv_lp
 sv_end  jsr CLRCHN
         lda #2
@@ -3537,31 +4165,9 @@ kl_do   jsr extchk              ; blocked file extension?
 +       lda device
         bne +
         jmp uload               ; Loading via UCI
-+       lda #0
-        jsr SETNAM
-        jsr open15
++       jsr dopen
         bcc +
-        jmp dev_err
-+       lda #2
-        ldx device
-        ldy #2
-        jsr SETLFS
-        lda #'R'
-        jsr setfile
-        jsr OPEN
-        jsr drvstat
-        lda msgbuf
-        cmp #'0'
-        bne ld_bad
-        lda msgbuf+1
-        cmp #'0'
-        beq ld_ok
-ld_bad  jmp ld_err
-ld_ok
-        ldx #2
-        jsr CHKIN
-        bcc +
-        jmp ld_err              ; drive does not respond
+        rts                     ; error (message is shown)
 +       jsr newtext
         jsr trmark              ; up to the end: text incomplete
         lda #0
@@ -3571,31 +4177,25 @@ ld_lp   jsr CHRIN
         jsr READST
         sta tmp
         lda chr
-        beq ld_nx               ; skip NUL and CR
-        cmp #$0d
-        beq ld_nx
-        jsr gapful              ; gap full: file too big
-        bne ld_st
-        lda #1
-        sta toobig
-        jmp ld_fin
-ld_st   lda chr
-        ldy #0
-        sta (gs),y
-        #inc16 gs
-ld_nx   lda tmp
+        jsr pbyte
+        bcc +
+        jmp ld_big              ; gap full: file too big
++       lda tmp
         beq ld_lp               ; status 0: file not at its end yet
 ld_fin  jsr closeall
-ld_tail jsr setgap
-        jsr k_clr               ; cursor to the start of the text
-        lda cur
-        sta top
-        lda cur+1
-        sta top+1
+ld_tail jsr pflush              ; E2 (80) at the very end
+        lda sact                ; streaming: own end
+        beq +
+        jmp sw_tail
++       jsr setgap
+        jsr totop               ; cursor and top to the start of the text
         jsr stclear
         lda upart               ; part loaded: write protection stays
         beq ld_whole
-        #msg m_part
+        lda device              ; drive U: streaming
+        bne ld_pmsg
+        jsr spsave
+ld_pmsg #msg m_part
         lda ukk
         ldx ukk+1
         jsr prnum
@@ -3622,6 +4222,125 @@ ld_err  jsr closeall
         jsr showdrv
         sec                     ; error
         rts
+
+; Open the file fname on the disk for reading, input from it
+; Carry set: error (the message is shown)
+dopen   lda #0
+        jsr SETNAM
+        jsr open15
+        bcc +
+        jmp dev_err
++       lda #2
+        ldx device
+        ldy #2
+        jsr SETLFS
+        lda #'R'
+        jsr setfile
+        jsr OPEN
+        jsr drvstat
+        lda msgbuf
+        cmp #'0'
+        bne dp_bad
+        lda msgbuf+1
+        cmp #'0'
+        bne dp_bad
+        ldx #2
+        jsr CHKIN
+        bcs dp_bad              ; drive does not respond
+        rts
+dp_bad  jmp ld_err
+
+; Disk: the file does not fit.  Size from the directory (blocks x 254),
+; ask for the part, read the start and discard it, then load the part.
+; STOP or no size found: the shortened text stays (as before).
+dk_stp  jsr closeall
+ld_tb   lda #0
+        sta upart
+        jmp ld_tail
+ld_big  lda #1
+        sta toobig
+        jsr closeall
+        jsr dirscan             ; blocks of the file
+        bcs ld_tb
+        lda dfound
+        beq ld_tb
+        lda dold                ; usize = blocks * 256 - blocks * 2
+        asl
+        sta utmp4
+        lda dold+1
+        rol
+        sta utmp4+1
+        lda #0
+        rol
+        sta utmp4+2
+        sec
+        lda #0
+        sbc utmp4
+        sta usize
+        lda dold
+        sbc utmp4+1
+        sta usize+1
+        lda dold+1
+        sbc utmp4+2
+        sta usize+2
+        lda #0
+        sta usize+3
+        jsr upick               ; ask for the part
+        bcs ld_tb
+        jsr dopen
+        bcc +
+        rts                     ; error (message is shown)
++       ldx #2                  ; read the start and discard it
+-       lda upos,x
+        sta uskip,x
+        dex
+        bpl -
+dk_sk   lda uskip
+        ora uskip+1
+        ora uskip+2
+        beq dk_go
+        jsr KSTOP               ; STOP: keep the shortened text
+        beq dk_stp
+        jsr CHRIN
+        jsr READST
+        bne dk_go               ; end of the file
+        lda uskip
+        sec
+        sbc #1
+        sta uskip
+        lda uskip+1
+        sbc #0
+        sta uskip+1
+        lda uskip+2
+        sbc #0
+        sta uskip+2
+        jmp dk_sk
+dk_go   jsr newtext
+        jsr trmark              ; a part: text incomplete
+        lda #0
+        sta toobig
+        sta wfst
+dk_lp   jsr CHRIN
+        sta chr
+        jsr READST
+        sta tmp
+        lda chr
+        jsr pbyte
+        lda lstop               ; end of the part
+        bne dk_end
+        lda ptrim               ; at most usize bytes
+        beq +
+        lda uraw+1
+        cmp usize+1
+        bcc +
+        bne dk_end
+        lda uraw
+        cmp usize
+        bcs dk_end
++       lda tmp
+        beq dk_lp
+dk_end  jsr closeall
+        jmp ld_tail
 
 ; Show the drive message, carry set if it does not start with 00
 shownok jsr stclear
@@ -3748,6 +4467,8 @@ uaddtmp ldx #0
 ; routine in ucbv; it reports with carry set: abort.
 ; Afterwards the status text is in USTAT (with 0 at the end), length ustl.
 ; Carry set: no response (timeout), USTAT holds a message
+runcb   stx ucbv                ; response routine X (low), Y (high)
+        sty ucbv+1
 ucirun  lda #0
         sta ustl
         jsr ucihere             ; interface still mapped in?
@@ -4136,11 +4857,9 @@ cd_look lda #0
         bcs cl_rt
         lda #$14                ; READ_DIR, compare every entry
         jsr ucmd
-        lda #<cb_find
-        sta ucbv
-        lda #>cb_find
-        sta ucbv+1
-        jsr ucirun
+        ldx #<cb_find
+        ldy #>cb_find
+        jsr runcb
         lda cdfnd
         beq cl_rt
         ldx #0                  ; take over the spelling found
@@ -4218,7 +4937,13 @@ cb_path ldx #0
 ; ---------------------------------------------------------------------
 ;  UCI: loading
 ; ---------------------------------------------------------------------
-uload   jsr haswild             ; wildcards: find a matching file
+uload   lda sact                ; new load: begin with part 1
+        bne +
+        lda #1
+        sta ukk
+        lda #0
+        sta ukk+1
++       jsr haswild             ; wildcards: find a matching file
         bcc ul_open
         jsr uglob
         bcc ul_open             ; found: fname holds the real name
@@ -4241,11 +4966,9 @@ ul_open jsr extchk              ; blocked file extension?
 +
         lda #$07                ; FILE_INFO: file size
         jsr ucmd
-        lda #<cb_info
-        sta ucbv
-        lda #>cb_info
-        sta ucbv+1
-        jsr ucirun
+        ldx #<cb_info
+        ldy #>cb_info
+        jsr runcb
         bcc +
         jmp ul_cerr
 +
@@ -4263,6 +4986,38 @@ ul_go   jsr newtext
         jsr trmark              ; up to the end: text incomplete
         lda #0
         sta toobig
+        sta wfst
+        sta tfound
+        sta tsrch
+        ldx #3                  ; window position in the file
+-       lda upos,x
+        sta wpos,x
+        dex
+        bpl -
+        lda sact                ; streaming: search the old place
+        beq ul_lp
+        lda smode
+        cmp #1
+        beq +
+        cmp #2
+        bne ul_lp
++       sec                     ; ttgt = stgt - upos (only if < 64 KByte)
+        lda stgt
+        sbc upos
+        sta ttgt
+        lda stgt+1
+        sbc upos+1
+        sta ttgt+1
+        lda stgt+2
+        sbc upos+2
+        tax
+        lda stgt+3
+        sbc upos+3
+        bcc ul_lp
+        bne ul_lp
+        txa
+        bne ul_lp
+        inc tsrch
 ul_lp   lda lstop               ; end of the part reached?
         beq +
         jmp ul_done
@@ -4280,11 +5035,9 @@ ul_lp   lda lstop               ; end of the part reached?
         jsr uaddb
         lda uchk+1
         jsr uaddb
-        lda #<cb_load
-        sta ucbv
-        lda #>cb_load
-        sta ucbv+1
-        jsr ucirun
+        ldx #<cb_load
+        ldy #>cb_load
+        jsr runcb
         bcs ul_cerr
         lda toobig
         bne ul_done             ; memory full
@@ -4301,16 +5054,226 @@ ul_cerr jsr ushow               ; show the error, close the file
         lda #$03
         jsr ucmd
         jsr ucirun
-        lda #1
-        sta statshow
-        sec
-        rts
+        jmp sterr
 ul_err  jsr ushow
         sec
         rts
 
 ; ---------------------------------------------------------------------
-;  Drive U: load a file that is too big in parts
+;  Drive U: streaming.  A file that is too big is loaded in parts
+;  (see upick).  At the end or start of a part the next or previous
+;  part is loaded on its own, the cursor stays at the same place.
+; ---------------------------------------------------------------------
+; Load part snew.  smode: 0 = start, 1 = forward, 2 = back, 3 = end
+; Carry set: not loaded (STOP at the question or error)
+sswitch lda dirty               ; changes in this part?
+        beq +
+        jsr stclear
+        #msg m_lost
+        jsr confirm
+        bcs +
+        jsr stclear
+        sec
+        rts
++       ldy #0                  ; target in the file: forward = behind
+        lda smode               ; the window, back = its start
+        cmp #1
+        bne +
+        ldy #wendr-wbegr
++       lda wbegr,y
+        ldx wbegr+1,y
+        clc
+        adc wpos
+        sta stgt
+        txa
+        adc wpos+1
+        sta stgt+1
+        lda wpos+2
+        adc #0
+        sta stgt+2
+        lda wpos+3
+        adc #0
+        sta stgt+3
+        jsr curp                 ; colb = bytes from the start of the line
+        jsr linestart
+        lda #0
+        sta colb
+        lda p
+        cmp cur
+        bne +
+        lda p+1
+        cmp cur+1
+        beq sw_cb
++       sec
+        lda gs
+        sbc p
+        tax
+        lda gs+1
+        sbc p+1
+        beq +
+        ldx #255
++       stx colb
+sw_cb   lda crow
+        sta crow0
+        lda snew
+        sta ukk
+        lda snew+1
+        sta ukk+1
+        lda #1
+        sta sact
+        lda #0
+        sta upart
+        lda device              ; the file is on drive U
+        sta sdev                ; (the browser may be on another drive)
+        lda #0
+        sta device
+        jsr spgo                ; folder of the file
+        bcs sw_err
+        ldx #0                  ; name of the file
+-       lda tname,x
+        sta fname,x
+        inx
+        cpx tlen
+        bne -
+        stx flen
+        jsr uload
+        bcs sw_err
+        jsr sw_dev
+        clc
+        rts
+sw_dev  lda sdev                ; drive of the browser back
+        sta device
+        bne +                   ; browser on drive U: its list is old
+        lda #0
+        sta bvalid
++       rts
+sw_err  jsr sw_dev
+        lda #0
+        sta sact
+        sta stream              ; no more streaming
+        jmp sterr
+
+; End of loading a part while streaming
+sw_tail jsr setgap              ; cursor at the end, all text before it
+        lda #0
+        sta sact
+        sta dirty
+        lda #1
+        sta stream
+        lda smode
+        cmp #3
+        beq sw_end
+        lda tfound
+        beq sw_nf
+        clc                     ; p = place found + column
+        lda tidx
+        adc #<BUF
+        sta p
+        lda tidx+1
+        adc #>BUF
+        sta p+1
+        ldx colb
+-       beq +
+        ldy #0
+        lda (p),y
+        beq +
+        cmp #LF
+        beq +
+        #inc16 p
+        dex
+        jmp -
++       jsr moveto
+        jsr rowstart            ; same screen line as before
+        lda crow0
+        sta tmp2
+-       lda tmp2
+        beq +
+        jsr isbeg
+        beq +
+        jsr prevrow
+        dec tmp2
+        jmp -
++       lda p
+        sta top
+        lda p+1
+        sta top+1
+        jmp sw_msg
+sw_nf   lda smode               ; not found: back = end, otherwise start
+        cmp #2
+        beq sw_end
+        jsr totop
+        jmp sw_msg
+sw_end  lda #<BUF               ; cursor stays at the end
+        sta top
+        lda #>BUF
+        sta top+1
+sw_msg  jsr stclear
+        jsr ld_pmsg
+        clc
+        rts
+
+; Remember the folder of the file (GET_PATH) for streaming
+spsave  lda #0
+        sta stream
+        lda #$12                ; GET_PATH
+        jsr ucmd
+        ldx #<cb_path
+        ldy #>cb_path
+        jsr runcb
+        bcs +
+        ldx llen
+        cpx #40                 ; too long: no streaming
+        bcs +
+        stx splen
+-       lda lbuf,x
+        sta spath,x
+        dex
+        bpl -
+        lda #1
+        sta stream
++       rts
+
+; Change to the remembered folder: "/" and then part by part
+; Carry set: error (the message is shown)
+spgo    lda #'/'
+        sta cbuf
+        lda #1
+        sta cblen
+        jsr cd_cmd
+        bcs sp_err
+        ldx #1
+sp_lp   cpx splen
+        bcs sp_ok
+        ldy #0
+-       cpx splen
+        beq +
+        lda spath,x
+        cmp #'/'
+        beq +
+        sta cbuf,y
+        inx
+        iny
+        cpy #25
+        bcc -
+        bcs sp_err              ; part too long
++       inx                     ; skip /
+        sty cblen
+        tya
+        beq sp_lp
+        txa
+        pha
+        jsr cd_cmd
+        pla
+        tax
+        bcc sp_lp
+sp_err  jsr ushow
+        sec
+        rts
+sp_ok   clc
+        rts
+
+; ---------------------------------------------------------------------
+;  Load a file that is too big in parts (drive U: streaming, disk: question)
 ;  Part 1 starts at 0, part k at (k-1)*PSTEP-POVL, at most PLEN
 ;  bytes are read.  Parts from 2 on start after the first LF.
 ;  Parts before the last one end at the first LF after PSTEP (part 1) or
@@ -4344,12 +5307,30 @@ up_big  lda #1                  ; find the number of parts
         sta unum+1
         jsr up_p0
 -       jsr up_cmp              ; part reaches up to the end?
-        bcs up_ask
+        bcs up_cnt
         jsr up_next
         inc unum
         bne -
         inc unum+1
         bne -
+up_cnt  lda device              ; disk: ask for the part
+        bne up_ask
+        lda unum+1              ; UCI: part ukk (at most n), no question
+        cmp ukk+1
+        bcc +
+        bne ++
+        lda unum
+        cmp ukk
+        bcs ++
++       lda unum
+        sta ukk
+        lda unum+1
+        sta ukk+1
++       lda ukk
+        sta uval
+        lda ukk+1
+        sta uval+1
+        jmp up_sel
 up_ask  jsr stclear             ; "File too big! Part (1-n): "
         #msg m_pask
         lda unum
@@ -4360,11 +5341,7 @@ up_ask  jsr stclear             ; "File too big! Part (1-n): "
         bcc up_chk
         cmp #$03
         bne up_ask              ; no number: again
-        lda #$03                ; STOP: close the file
-        jsr ucmd
-        jsr ucirun
-        lda #1
-        sta nokey
+        lda #1                  ; STOP
         sec
         rts
 up_chk  lda uval                ; 1 to n?
@@ -4381,7 +5358,7 @@ up_chk  lda uval                ; 1 to n?
         sta ukk
         lda uval+1
         sta ukk+1
-        jsr stclear
+up_sel  jsr stclear
         #msg m_lding
         jsr up_p0               ; find the start of part k
 -       lda uval
@@ -4444,7 +5421,11 @@ up_len  lda #1
         rts
 +       lda #1
         sta lskip
-        lda #$06                ; FILE_SEEK
+        lda device              ; disk: the caller reads up to the start
+        beq +
+        clc
+        rts
++       lda #$06                ; FILE_SEEK
         jsr ucmd
         ldx #0
 -       lda upos,x
@@ -4687,11 +5668,9 @@ uglob   lda #0
         bne ug_no
         lda #$14                ; READ_DIR, check every entry
         jsr ucmd
-        lda #<cb_glob
-        sta ucbv
-        lda #>cb_glob
-        sta ucbv+1
-        jsr ucirun
+        ldx #<cb_glob
+        ldy #>cb_glob
+        jsr runcb
         lda gfound
         beq ug_no
         ldx #0                  ; take over the real name
@@ -4901,48 +5880,10 @@ cl_lp   lda ucnt2
         rts
 +       ldy #0
         lda (ur),y
-        sta cbyte
-        lda ptrim               ; part: count the bytes read
-        beq +
-        #inc16 uraw
-        lda lstop               ; end reached: discard the rest
-        bne cl_nx
-+       lda cbyte
-        ldx lskip               ; part: leave out the start up to the first LF
-        beq +
-        cmp #LF
-        bne cl_nx
-        dec lskip
-        jmp cl_nx
-+       cmp #0
-        beq cl_nx
-        cmp #$0d
-        beq cl_nx
-        jsr gapful              ; gap full?
-        bne +
-        lda #1
-        sta toobig
-        sec
-        rts
-+       lda cbyte
-        ldy #0
-        sta (gs),y
-        #inc16 gs
-        lda ptrim               ; part: first LF after uend = end
-        beq cl_nx
-        lda cbyte
-        cmp #LF
-        bne cl_nx
-        lda uend+1              ; only when uraw > uend
-        cmp uraw+1
+        jsr pbyte
         bcc +
-        bne cl_nx
-        lda uend
-        cmp uraw
-        bcs cl_nx
-+       lda #1
-        sta lstop
-cl_nx   inc ur
+        rts                     ; memory full
++       inc ur
         bne +
         inc ur+1
 +       lda ucnt2
@@ -4950,6 +5891,156 @@ cl_nx   inc ur
         dec ucnt2+1
 +       dec ucnt2
         jmp cl_lp
+
+; One byte of the file (A) into the text, with the rules for parts
+; (NUL and CR are left out).  Carry set: memory full
+pbyte   sta cbyte
+        lda upart               ; part: count the bytes read
+        beq +
+        #inc16 uraw
+        lda lstop               ; end reached: discard the rest
+        bne pb_no
++       lda cbyte
+        ldx lskip               ; part: leave out the start up to the first LF
+        beq +
+        cmp #LF
+        bne pb_sk
+        dec lskip
+pb_no   clc
+        rts
+pb_sk   ldx uraw+1              ; no LF for a long time: start here
+        cpx #>(POVL+PMARG)+1    ; (not inside a UTF-8 character)
+        bcc pb_no
+        and #$c0
+        cmp #$80
+        beq pb_no
+        dec lskip
+        lda cbyte
++       cmp #0
+        beq pb_no
+        cmp #$0d
+        beq pb_no
+pb_u8   ldx e2st                ; UTF-8 E2 80 xx (quotes, dash, ...)
+        bne pb_e2               ; is kept as C1 xx in the text
+        cmp #$e2
+        bne pb_put
+        inc e2st                ; E2: wait for the next byte
+        clc
+        rts
+pb_e2   cpx #2
+        beq pb_e3
+        cmp #$80
+        bne pb_f
+        inc e2st                ; E2 80: wait for the next byte
+        clc
+        rts
+pb_e3   jsr ise3                ; E2 80 xx: one of the editor's?
+        bcs pb_f
+        lda #0
+        sta e2st
+        lda #$c1
+        jsr pstore
+        bcs pb_rt
+        lda cbyte
+        jmp pb_put
+pb_f    jsr pflush              ; other: E2 (80) as it is,
+        bcs pb_rt               ; then this byte again
+        lda cbyte
+        jmp pb_u8
+pb_put  jsr pstore
+        bcs pb_rt
+        lda ptrim               ; part: first LF after uend = end
+        beq pb_x
+        lda cbyte
+        cmp #LF
+        bne pb_x
+        lda uend+1              ; only when uraw > uend
+        cmp uraw+1
+        bcc +
+        bne pb_x
+        lda uend
+        cmp uraw
+        bcs pb_x
++       lda #1
+        sta lstop
+pb_x    clc
+pb_rt   rts
+
+; Store the bytes E2 (and 80) that were held back.  Carry set: memory full
+pflush  ldx e2st
+        beq pf_ok
+        lda #0
+        sta e2st
+        txa
+        pha
+        lda #$e2
+        jsr pstore
+        pla
+        bcs pf_rt
+        cmp #2
+        bne pf_ok
+        lda #$80
+        jmp pstore
+pf_ok   clc
+pf_rt   rts
+
+; Is A one of the third bytes of E2 80 xx (e3tab)?  Carry clear: yes
+; A and X are unchanged
+ise3    ldy #e3n-1
+-       cmp e3tab,y
+        beq +
+        dey
+        bpl -
+        sec
+        rts
++       clc
+        rts
+
+; Store the byte A in the text.  Carry set: memory full
+pstore  sta pbyt
+        jsr gapful              ; gap full?
+        bne +
+        lda #1
+        sta toobig
+        sec
+        rts
++       lda wfst                ; window: file offset of the first byte
+        bne +
+        inc wfst
+        lda uraw
+        sec
+        sbc #1
+        sta wbegr
+        lda uraw+1
+        sbc #0
+        sta wbegr+1
++       lda tsrch               ; streaming: first byte at/after the target?
+        beq +
+        lda ttgt
+        cmp uraw
+        lda ttgt+1
+        sbc uraw+1
+        bcs +                   ; not yet
+        lda #0
+        sta tsrch
+        lda gs                  ; remember its place in the text
+        sec
+        sbc #<BUF
+        sta tidx
+        lda gs+1
+        sbc #>BUF
+        sta tidx+1
+        inc tfound
++       lda pbyt
+        ldy #0
+        sta (gs),y
+        #inc16 gs
+        lda uraw                ; window: file offset behind the last byte
+        sta wendr
+        lda uraw+1
+        sta wendr+1
+        clc
+        rts
 
 ; ---------------------------------------------------------------------
 ;  UCI: saving (safely via TE64.TMP)
@@ -5008,20 +6099,33 @@ uw_new  lda #$05                ; WRITE_DATA, two filler bytes
         lda #0
         jsr uaddb
         jsr uaddb
-uw_fill lda ucrp                ; after CR an LF follows
-        beq +
+uw_fill lda ucrp                ; byte that follows (LF after CR,
+        beq +                   ; 80 after E2)
+        pha
         lda #0
         sta ucrp
-        lda #LF
+        pla
         bne uw_put
 +       ldx #0
         lda (p,x)
         beq uw_end              ; end of the text
+        cmp #$c1                ; C1 xx: E2 80 xx in the file
+        bne +
         #nxt p
+        lda (p,x)
+        jsr ise3
+        bcs uw_c1
+        lda #$80
+        sta ucrp
+        lda #$e2
+        bne uw_put
+uw_c1   lda #$c1
+        bne uw_put
++       #nxt p
         .if CRLF
         cmp #LF
         bne uw_put
-        lda #1
+        lda #LF
         sta ucrp
         lda #$0d
         .endif
@@ -5125,6 +6229,7 @@ m_code  .null " Text code (e.g. 33-126): "
 m_full  .null " Memory full!"
 m_loaded .null " READY."
 m_big   .null " File too big - truncated!"
+m_lost  .null " Changes will be lost! Continue? (Y/N)"
 m_pask  .null " File too big! Part (1-"
 m_pask2 .null "): "
 m_part  .null " Part "
@@ -5153,6 +6258,8 @@ m_sving .null " SAVING..."
 m_uok   .null "00,OK"
 
 progend
+        .cerror (BUFEND & $ff) != 0, "BUFEND must be at a page start"
+        .cerror wendr != wbegr+2, "wendr must follow wbegr"
         .cerror (SCREEN>>14) != (CHARRAM>>14), "screen and character set not in one VIC bank"
         .cerror CHARRAM & $7ff, "character set not on a 2 KB boundary"
         .cerror BLIST+BMAX*BRECL > SCREEN, "file list overlaps the screen"
@@ -5175,6 +6282,34 @@ tmp2    .byte 0
 chr     .byte 0
 toobig  .byte 0
 tcnt    .byte 0
+showctl .byte 0                 ; 1 = show tab, line feed, space (F2)
+stream  .byte 0                 ; 1 = streaming (drive U, part of a file)
+sact    .byte 0                 ; 1 = loading a part while streaming
+smode   .byte 0                 ; 0 start, 1 forward, 2 back, 3 end
+snew    .word 0                 ; part to load
+stgt    .fill 4, 0              ; place in the file to find again
+wpos    .fill 4, 0              ; file offset of the loaded part
+wbegr   .word 0                 ; first byte of the text (from wpos)
+wendr   .word 0                 ; behind the last byte (from wpos)
+wfst    .byte 0                 ; 1 = first byte stored
+tsrch   .byte 0                 ; 1 = search ttgt while loading
+ttgt    .word 0                 ; place to find (from upos)
+tidx    .word 0                 ; place found (from BUF)
+tfound  .byte 0                 ; not 0 = found
+colb    .byte 0                 ; cursor: bytes from the start of the line
+crow0   .byte 0                 ; cursor: screen line
+kidx    .byte 0                 ; key number in the key table
+sredo   .byte 0                 ; 1 = key again after loading the part
+sdev    .byte 0                 ; drive of the browser while streaming
+cur0    .word 0                 ; cursor before the key
+dirty   .byte 0                 ; 1 = text changed
+splen   .byte 0                 ; folder of the streamed file
+spath   .fill 40, 0
+thiskey .byte 0                 ; last key and the one before it
+lastkey .byte 0                 ; (for HOME 2x, umlauts)
+umdone  .byte 0                 ; not 0: last umlaut was inserted
+e2st    .byte 0                 ; loading: 1 = E2, 2 = E2 80 held back
+pbyt    .byte 0
 mcol    .byte 0
 mt      .word 0
 gsz     .word 0
