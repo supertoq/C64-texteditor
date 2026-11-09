@@ -18,18 +18,20 @@ Special characters are mapped to suitable C64 screen codes for display.
   
 ### Features
   
-- Files are saved as C64 SEQ files containing plain ASCII text.  
-  (On Windows, the file extension must be changed to `.txt`.)
-- Optional line endings: LF or CRLF.
-- Text buffer at `$36B7-$CEFF` (38,985 bytes); BASIC ROM is switched off.
-- The uppercase/lowercase character set is copied to RAM at `$3000`.
-- Application memory usage: approx. 15 KB.
-- All keyboard input is converted to ASCII.  
-- Characters that cannot be entered directly via the keyboard can be entered manually using F8.  
-- Custom characters for German UTF-8 umlauts.  
-- Drives 8–11 can be selected for loading and saving; disks are checked for space before saving. 
-- File access via the UCI interface (Ultimate 64, C64 Ultimate) presented as drive U.
-- UCI: Files that are too large to fit in memory are split into parts; so you can still read them (e.g. book).
+- Files are saved as C64 SEQ files containing plain ASCII text  
+  (On Windows, the file extension must be changed to `.txt`)  
+- Line ending LF or CRLF selectable in the source code  
+- Text buffer at `$36B7-$CEFF` (36,681 bytes); BASIC ROM is switched off  
+- Upper/lower case character set is copied to RAM at $D000  
+- Application memory usage: approx. 15 KByte  
+- Every input is converted to ASCII  
+- Characters not available on the keyboard can be entered manually with F8  
+- Custom characters for German umlauts in UTF‑8 are available  
+- Files too large for memory can be loaded in parts (e.g. to read a whole book)  
+- Before saving to disk, the free space is checked  
+- Supported file access via the UCI interface (Ultimate 64, C64 Ultimate)  
+- UCI: Files too large for memory are loaded automatically in chunks as you scroll  
+- Disk images and programs (e.g. .d64, .prg) are not loaded or saved in the editor (optional)  
    
 ### ANSI X3.4-1986 Characters  
 ```
@@ -42,9 +44,9 @@ pqrstuvwxyz {|}~
 ```  
   
 ### Keyboard Controls  
-    F1 = Save   F3 = Load   F5 = New   F8 = Code input   F7 = Quit  
+    F1 = Save   F3 = Load   F5 = New   F8 = Code input   F7 = Exit  
       
-    Cursor keys  =  Move cursor 
+    Cursor keys  =  Move pointer 
     HOME    =   Start of line
     HOME 2x =   Start of text/file
     CLR     =   End of text/file 
@@ -66,6 +68,13 @@ pqrstuvwxyz {|}~
         SHIFT+| (Up Arrow) = Caret ^  
         SHIFT+:            = Square Bracket [  
         SHIFT+;            = Square Bracket ]  
+        C= + A / O / U     =  Umlaut ä ö ü (again at once: Ä/Ö/Ü)
+        C= + S             =  ß
+        C= + P             =  Section sign §
+        C= + G             =  Degree °
+        C= + Minus         =  Dash –
+        C= + 2             =  Quotes „ “ low at the start otherwise high
+        C= + 7             =  Apostrophe ’
   
     F8 = Enter any ASCII code (decimal) 
          33–126 = printable ASCII characters   
@@ -73,11 +82,10 @@ pqrstuvwxyz {|}~
          (Inputs of 0 and 13 are ignored)  
   
          Examples of decimal values:  
-         126 = ~  125 = }  123 = {  96 = `  9 = Tab   
+         126 = ~  123 = {  125 = }  9 = Tab   
   
-         Umlauts as Unicode input:  
-         228 = ä  246 = ö  252 = ü  
-         196 = Ä  214 = Ö  220 = Ü  223 = ß  
+         Examples of Unicode values:  
+         223 = ß  8218 = ‚  8216 = ‘  8230 = …  
          
   
 ### Starting
