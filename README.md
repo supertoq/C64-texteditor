@@ -4,8 +4,8 @@
 A text editor capable of loading, editing, and saving ASCII text.  
   
 <p>
-<img src="assets/screenshot-V2-00.png" alt="preview editor" width="400">
-<img src="assets/screenshot-V2.9-Umlauts.png" alt="preview umlauts" width="400">  
+<img src="assets/screenshot-V2-hello.png" alt="preview editor" width="400">
+<img src="assets/screenshot-V2.9-umlauts.png" alt="preview umlauts" width="400">  
 </p>  
 <p>
 <img src="assets/screenshot-V2.9-eng-normal.png" alt="preview texts" width="400">
