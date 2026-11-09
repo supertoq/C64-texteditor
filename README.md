@@ -4,12 +4,8 @@
 A text editor capable of loading, editing, and saving ASCII text.  
   
 <p>
-<img src="assets/screenshot-V2-hello.png" alt="preview editor" width="400">
-<img src="assets/screenshot-V2.9-umlauts.png" alt="preview umlauts" width="400">  
-</p>  
-<p>
-<img src="assets/screenshot-V2.9-eng-normal.png" alt="preview texts" width="400">
-<img src="assets/screenshot-V2.9-eng-ctrlon.png" alt="preview control chars" width="400">  
+<img src="assets/screenshot-V1-00.png" alt="texteditor screen 1" width="400">
+<img src="assets/screenshot-V1-04.png" alt="texteditor screen 2" width="400">  
 </p>  
 
 You can open and edit text files that you’ve transferred to the C64 from Windows or Linux. After editing them on the C64, you can process the text file on your PC again—it remains compatible.  
@@ -23,10 +19,10 @@ Special characters are mapped to suitable C64 screen codes for display.
 - Optional line endings: LF or CRLF.
 - Text buffer at `$36B7-$CEFF` (38,985 bytes); BASIC ROM is switched off.
 - The uppercase/lowercase character set is copied to RAM at `$3000`.
-- Application memory usage: approx. 15 KB.
+- Application memory usage: approx. 12 KB.
 - All keyboard input is converted to ASCII.  
 - Characters that cannot be entered directly via the keyboard can be entered manually using F8.  
-- Custom characters for German UTF-8 umlauts.  
+- German UTF-8 umlauts are displayed as inverted ASCII characters; no conversion is performed in the file.  
 - Drives 8–11 can be selected for loading and saving; disks are checked for space before saving. 
 - File access via the UCI interface (Ultimate 64, C64 Ultimate) presented as drive U.
 - UCI: Files that are too large to fit in memory are split into parts; so you can still read them (e.g. book).
@@ -45,10 +41,9 @@ pqrstuvwxyz {|}~
     F1 = Save   F3 = Load   F5 = New   F8 = Code input   F7 = Quit  
       
     Cursor keys  =  Move cursor 
-    HOME    =   Start of line
-    HOME 2x =   Start of text/file
-    CLR     =   End of text/file 
-    F2      =   Display control characters on/off 
+    HOME    =   Start of line  
+    CLR     =   Start of text 
+    F2      =   End of text 
     F4 / F6 =   Page up / down   
   
     DEL          =  Backspace          
@@ -78,12 +73,18 @@ pqrstuvwxyz {|}~
          Umlauts as Unicode input:  
          228 = ä  246 = ö  252 = ü  
          196 = Ä  214 = Ö  220 = Ü  223 = ß  
+  
+    Special Character Mapping:  
+        { } = displayed as inverted Parentheses ()  
+         ~  = displayed as an inverted Minus Sign -  
+         german UTF-8 umlauts = displayed as inverted ASCII character  
+         UTF-8 Chevrons « » = displayed as inverted < >   
          
   
 ### Starting
 Start the program from floppy disk using `LOAD"TEXTEDITOR",8,1` and `RUN`.
   
-### File Browser, Drive Selection, Loading and Saving
+### File Loading, Saving, and Drive Selection
 <p>
 <img src="assets/screenshot-V2-drives.png" alt="loading file" width="400">
 <img src="assets/screenshot-V2-USB-01.png" alt="loading file" width="400">
@@ -108,11 +109,11 @@ The line ending (LF/CRLF), the file extensions in the blocklist, translated char
 >The code was created with the assistance of Claude.  
    
 ### Useful Information
-PETSCII Codes
+PETSCII-Codes
 ```  
 https://www.c64-wiki.de/wiki/PETSCII  
 ```  
-ASCII Encodes 
+ANSI X3.4
 ```  
 https://en.wikipedia.org/wiki/ASCII  
 ```  
