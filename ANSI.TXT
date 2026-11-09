@@ -16,6 +16,7 @@ Additional UTF-8 characters²:
 ß   [C= + S]
 §   [C= + P]
 „ “ [C= + 2]
+’   [C= + 7]
 –   [C= + Minus]
 °   [C= + G]
 Guillemet « (171) » (187) 
